@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "halos.h": "c",
+        "types.h": "c",
+        "stdio.h": "c",
+        "stdarg.h": "c",
+        "debug.h": "c",
+        "string.h": "c",
+        "global.h": "c",
+        "interrupt.h": "c",
+        "printk.h": "c",
+        "io.h": "c"
+    }
+}
