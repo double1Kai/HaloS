@@ -11,7 +11,7 @@ mov es, ax
 mov ss, ax
 mov sp, 0x7c00
 
-mov si, booting
+mov si, booting;传参
 call print
 
 mov edi, 0x1000;写入的内存地址
@@ -118,7 +118,7 @@ error:
     .msg: 
         db "Booting Error!",10,13,0
 
-;将当前行至510行用0填满
+;将当前地址至510字节用0填满
 times 510 - ($ - $$) db 0
 ;最后填上55 aa，主引导扇区的结束标志 
 db 0x55, 0xaa 
