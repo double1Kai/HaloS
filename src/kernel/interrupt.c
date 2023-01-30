@@ -4,10 +4,11 @@
 #include <halos/printk.h>
 #include <halos/io.h>
 #include <halos/stdlib.h>
+#include <halos/assert.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
-//#define LOGK(fmt, args...)
+//#define LOGK(fmt, args...)//两行切换可以控制显示信息
 
 #define ENTRY_SIZE 0x30
 
@@ -61,14 +62,51 @@ void send_eoi(int vector){
     }
 }
 
+//将不同中断的处理函数放到handler_table中
+void set_interrupt_handler(u32 irq, handler_t handler)
+{
+    assert(irq >= 0 && irq < 16);
+    handler_table[IRQ_MASTER_NR + irq] = handler;
+}
+
+//打开屏蔽字
+void set_interrupt_mask(u32 irq, bool enable)
+{
+    assert(irq >= 0 && irq < 16);
+    u16 port;
+    if (irq < 8)
+    {
+        port = PIC_M_DATA;
+    }
+    else
+    {
+        port = PIC_S_DATA;
+        irq -= 8;
+    }
+    if (enable)
+    {
+        outb(port, inb(port) & ~(1 << irq));
+    }
+    else
+    {
+        outb(port, inb(port) | (1 << irq));
+    }
+}
+
 u32 counter = 0;
 
 void default_handler(int vector){
     send_eoi(vector);
-    LOGK("[%d] default interrupt called %d...\n",vector, counter++); 
+    DEBUGK("[0x%x] default interrupt called %d...\n",vector,counter++);
 }
 
-void exception_handler(int vector){
+void exception_handler(
+    int vector,
+    u32 edi, u32 esi, u32 ebp, u32 esp, 
+    u32 ebx, u32 edx, u32 ecx, u32 eax, 
+    u32 gs, u32 fs, u32 es, u32 ds,
+    u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags)//获取上文
+    {
     char *message = NULL;
     if(vector < 22){
         message = messages[vector];
@@ -76,11 +114,17 @@ void exception_handler(int vector){
     else{
         message = messages[15];
     }
-    printk("Exception : [0x%02X] %s \n",vector,message);
+    printk("\nEXCEPTION : %s \n",message);
+    printk("   VECTOR : 0x%02X \n",vector);
+    printk("    ERROR : 0x%08X \n",error);
+    printk("   EFLAGS : 0x%08X \n",eflags);
+    printk("       CS : 0x%02X \n",cs);
+    printk("      EIP : 0x%08X \n",eip);
+    printk("      ESP : 0x%08X \n",esp);
     hang();//阻塞
 }
 
-//初始化中断控制器，纯抄来的，具体看p33 17:00
+//初始化中断控制器，纯抄来的，具体看p33 17:00，可以触发时钟中断
 void pic_init(){
     outb(PIC_M_CTRL,0b00010001);// ICW1: 边沿触发，级联8259， 需要ICW4
     outb(PIC_M_DATA, 0x20);//ICW2: 起始中断向量号0x20，前20个归intel
@@ -92,7 +136,7 @@ void pic_init(){
     outb(PIC_S_DATA, 2);//ICW3: 从片连接到主片的IR2引脚
     outb(PIC_S_DATA, 0b00000001);//ICW4: 8086模式，正常EOI
 
-    outb(PIC_M_DATA, 0b11111110);//关闭所有中断
+    outb(PIC_M_DATA, 0b11111111);//关闭所有中断
     outb(PIC_S_DATA, 0b11111111);//关闭所有中断
 }
 
@@ -101,7 +145,7 @@ void idt_init(){
     for (size_t i = 0; i < ENTRY_SIZE; i++)
     {
         gate_t *gate = &idt[i];
-        handler_t handler = handler_entry_table[i];
+        handler_t handler = handler_entry_table[i];//将handler.asm中生成的中断处理函数注册到描述符
         
         gate->offset0 = (u32)handler & 0xffff;//段内偏移0~15
         gate->offset1 = ((u32)handler >> 16) & 0xffff;//段内偏移16~31
@@ -115,6 +159,7 @@ void idt_init(){
 
     for (size_t i = 0; i < 0x20; i++)
     {
+        
         handler_table[i] = exception_handler;
     }
     for (size_t i = 0x20;i < ENTRY_SIZE; i++){

@@ -49,7 +49,7 @@ int strcmp(const char *lhs, const char *rhs){
     return *lhs < *rhs ? -1 : *lhs > *rhs;
 }
 
-//查找第一个匹配的字符的位置
+//从左侧开始查找第一个匹配的字符的位置
 char *strchr(const char *str, int ch){
     char *ptr = (char *)str;
     while (true)
@@ -109,11 +109,9 @@ void *memcpy(void *dest, const void *src, size_t count){
         *ptr++ =*((char*)(src++));
     }
     return dest;
-    
-
 }
 
-//拼接内存区域
+//在一段内存找到ch字符
 void *memchr(const void *str, int ch, size_t count){
     char *ptr = (char *)str;
     while (count--)

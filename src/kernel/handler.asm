@@ -5,6 +5,7 @@ extern handler_table;存放了中断处理函数的指针
 
 section .text
 
+;宏，方便写所有的中断函数
 %macro INTERRUPT_HANDLER 2;两个参数，1是编号，2是是否压入错误码
 interrupt_handler_%1:;针对编号
     xchg bx, bx
@@ -15,15 +16,35 @@ interrupt_handler_%1:;针对编号
     jmp interrupt_entry
 %endmacro
 
+;中断处理函数由两层函数嵌套，一个保存恢复上下文，由handler_table中的函数处理中断
 interrupt_entry:
-    ;栈顶存放的中断向量
-    mov eax, [esp]
+    ;保存上下文信息
+    push ds
+    push es
+    push fs
+    push gs
+    pusha
+
+    ;获取栈中存放的中断向量编号
+    mov eax, [esp + 12 * 4]
+    ;传递中断处理函数的参数（中断向量编号）
+    push eax
     ;调用对应的中断处理函数
     call[handler_table + eax * 4]
     ;调用完成后恢复栈
-    add esp, 8
+    add esp, 4
+
+    popa
+    pop gs
+    pop fs
+    pop es
+    pop ds
+
+    add esp, 8;恢复栈
+
     iret
 
+;用宏生成函数
 INTERRUPT_HANDLER 0x00, 0;除零
 INTERRUPT_HANDLER 0x01, 0;陷阱
 INTERRUPT_HANDLER 0x02, 0;陷阱
@@ -74,7 +95,7 @@ INTERRUPT_HANDLER 0x25, 0
 INTERRUPT_HANDLER 0x26, 0
 INTERRUPT_HANDLER 0x27, 0
 
-INTERRUPT_HANDLER 0x28, 0
+INTERRUPT_HANDLER 0x28, 0 ;rtc实时时钟
 INTERRUPT_HANDLER 0x29, 0
 INTERRUPT_HANDLER 0x2a, 0
 INTERRUPT_HANDLER 0x2b, 0

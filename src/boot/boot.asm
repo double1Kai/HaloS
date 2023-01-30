@@ -1,3 +1,4 @@
+;读入内核加载器loader，并跳转至loader执行
 [org 0x7c00];引导扇区起始，定了编译时的偏移地址，最后编译出来的二进制指令中的地址全部会加上0x7c00
 
 ;设置屏幕为文本模式，并清空屏幕
@@ -30,7 +31,7 @@ jmp $
 read_disk:
     mov dx, 0x1f2;扇区数量端口
     mov al, bl
-    out dx, al
+    out dx, al;输入输出只能用ax
 
     inc dx;起始扇区低8位
     mov al, cl
@@ -63,21 +64,20 @@ read_disk:
     .read:
         push cx
         call .waits;等待数据准备完毕
-        call .reads;读取数据
+        call .reads;读取一个扇区的数据
         pop cx
         loop .read
-
     ret
 
     .waits:
-        mov dx, 0x1f7
+        mov dx, 0x1f7;获取硬盘数据准备情况
         .check:
             in al, dx
             jmp $+2
             jmp $+2
             jmp $+2;延迟
             and al, 0b1000_1000;取第0位和第7位
-            cmp al, 0b0000_1000;如果第7位是0，第三位是1
+            cmp al, 0b0000_1000;如果第7位是0，第三位是1，则正常返回
             jnz .check;否则重复check
         ret
 
@@ -93,8 +93,7 @@ read_disk:
             add edi, 2
             loop .readw
         ret
-
-
+        
 print:
     mov ah, 0x0e
     .next:

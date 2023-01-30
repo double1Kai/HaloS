@@ -2,13 +2,13 @@ ENTRYPOINT:=0x10000
 BUILD:=../build
 SRC:=.
 CFLAGS:= -m32 #32位程序
-CFLAGS+= -fno-builtin #不需要gcc内置函数
-CFLAGS+= -nostdinc #不需要标准头文件 
-CFLAGS+= -fno-pic #不需要位置无关的代码 
-CFLAGS+= -fno-pie #不需要位置无关的可执行程序 
-CFLAGS+= -nostdlib #不需要标准库 
-CFLAGS+= -fno-stack-protector #不需要栈保护
-CFLAGS:=$(strip ${CFLAGS})
+CFLAGS+= -fno-builtin 	#不需要gcc内置函数
+CFLAGS+= -nostdinc 		#不需要标准头文件 
+CFLAGS+= -fno-pic 		#不需要位置无关的代码(postion independent code) 
+CFLAGS+= -fno-pie 		#不需要位置无关的可执行程序(postion independent excutable) 
+CFLAGS+= -nostdlib 		#不需要标准库
+CFLAGS+= -fno-stack-protector 	#不需要栈保护
+CFLAGS:=$(strip ${CFLAGS}) 		#让命令行更好看点
 DEBUG:= -g
 INCLUDE:=-I$(SRC)/include
 
@@ -37,6 +37,11 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/schedule.o \
 	$(BUILD)/kernel/interrupt.o \
 	$(BUILD)/kernel/handler.o \
+	$(BUILD)/kernel/clock.o \
+	$(BUILD)/kernel/time.o \
+	$(BUILD)/kernel/rtc.o \
+	$(BUILD)/kernel/memory.o \
+	$(BUILD)/kernel/bitmap.o \
 	$(BUILD)/lib/vsprintf.o \
 	$(BUILD)/lib/string.o \
 	$(BUILD)/lib/stdlib.o
@@ -58,6 +63,8 @@ $(BUILD)/master.img: $(BUILD)/boot/boot.bin \
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
 	dd if=$(BUILD)/boot/boot.bin of=$@ bs=512 count=1 conv=notrunc
 	dd if=$(BUILD)/boot/loader.bin of=$@ bs=512 count=4 seek=2 conv=notrunc
+	#测试system.bin的大小，大于100k的话需要写入更多，lodaer里也需要读入更多
+	test -n "$$(find $(BUILD)/system.bin -size -100k)"
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=200 seek=10 conv=notrunc
 
 test: $(BUILD)/master.img
@@ -75,7 +82,10 @@ qemu: $(BUILD)/master.img
 	qemu-system-i386 \
 	-m 32M \
 	-boot c \
-	-hda $<
+	-drive file=$<,if=ide,index=0,media=disk,format=raw \
+	-audiodev pa,id=hda \
+	-machine pcspk-audiodev=hda \
+	-rtc base=localtime \
 
 .PHONY: qemug
 qemug: $(BUILD)/master.img
@@ -83,7 +93,10 @@ qemug: $(BUILD)/master.img
 	-s -S \
 	-m 32M \
 	-boot c \
-	-hda $<
+	-drive file=$<,if=ide,index=0,media=disk,format=raw \
+	-audiodev pa,id=hda \
+	-machine pcspk-audiodev=hda \
+	-rtc base=localtime \
 
 $(BUILD)/master.vmdk: $(BUILD)/master.img
 	qemu-img convert -pO vmdk $< $@

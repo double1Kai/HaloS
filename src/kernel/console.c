@@ -1,6 +1,7 @@
 #include<halos/console.h>
 #include<halos/io.h>
 #include<halos/string.h>
+#include<halos/clock.h>
 
 #define CRT_ADDR_REG 0x3D4 //索引寄存器
 #define CRT_DATA_REG 0x3D5 //数据寄存器
@@ -65,10 +66,10 @@ static void get_cursor(){
     
     get_screen();
 
-    pos <<=1;
+    pos <<=1;//两个字节是一个字符
     pos += MEM_BASE;
 
-    u32 delta = (pos - screen)>>1;
+    u32 delta = (pos - screen)>>1;//当前光标的相对位置
     x = delta % WIDTH;
     y = delta / WIDTH;
 }
@@ -91,10 +92,11 @@ void console_clear(){
     u16 *ptr = (u16 *)MEM_BASE;
     while (ptr < (u16 *)MEM_END)
     {
-       *ptr++ = erase;
+       *ptr++ = erase;//全改成空格
     }
 }
 //各类转义字符
+//退格
 static void command_bs(){
     if(x){
         x--;
@@ -102,31 +104,32 @@ static void command_bs(){
         *(u16 *)pos = erase;
     }
 }
+//del
 static void command_del(){
         *(u16 *)pos = erase;
 }
+//回到本行起点
 static void command_cr(){
     pos -= (x<<1);
     x = 0;
 }
+//向上翻滚一行
 static void scroll_up(){
-    if(screen + SCR_SIZE + ROW_SIZE < MEM_END)
-    {
-        u32 *ptr = (u32 *)(screen + SCR_SIZE);
-        for(size_t i = 0; i < WIDTH; i++){
-            *ptr++ = erase;
-        }
-        screen += ROW_SIZE;
-        pos += ROW_SIZE;
-    }
-    else
+    if(screen + SCR_SIZE + ROW_SIZE >= MEM_END)
     {
         memcpy((void *)MEM_BASE, (void *)screen, SCR_SIZE);
         pos -= (screen - MEM_BASE);
         screen = MEM_BASE;
     }
+    u32 *ptr = (u32 *)(screen + SCR_SIZE);
+    for(size_t i = 0; i < WIDTH; i++){
+        *ptr++ = erase;
+    }
+    screen += ROW_SIZE;
+    pos += ROW_SIZE;
     set_screen();
 }
+//向下一行
 static void command_lf(){
     if(y + 1 < HEIGHT){ 
         y++;
@@ -135,6 +138,7 @@ static void command_lf(){
     }
     scroll_up();
 }
+
 //在屏幕上输出字符串
 void console_write(char *buf, u32 count){
     char ch;
@@ -148,6 +152,7 @@ void console_write(char *buf, u32 count){
         case ASCII_ENQ:
             break;
         case ASCII_BEL:
+            start_beep();
             break;
         case ASCII_BS:
             command_bs();

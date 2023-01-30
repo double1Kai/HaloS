@@ -9,6 +9,9 @@
         "global.h": "c",
         "interrupt.h": "c",
         "printk.h": "c",
-        "io.h": "c"
+        "io.h": "c",
+        "clock.h": "c",
+        "stdlib.h": "c",
+        "assert.h": "c"
     }
 }

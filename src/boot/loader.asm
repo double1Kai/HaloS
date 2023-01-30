@@ -1,3 +1,4 @@
+;进行内存检测，进入保护模式，读入内核kernel，并跳转至start执行
 [org 0x1000]
 
 dw 0x55aa;用于判断错误
@@ -11,13 +12,13 @@ detect_memory:
     mov es, ax
     mov edi, ards_buffer;es:di为缓冲区
     mov edx, 0x534d4150;固定签名
-    mov ecx, 20
+    mov ecx, 20;ards结构大小（字节）
     .next:
         mov eax, 0xe820;准备系统调用子功能
         int 0x15
-        jc error;检测返回的CF
-        add di, cx;指向下一个ARDS
-        inc word [ards_count]
+        jc error;检测返回的CF，若为1则表示出错
+        add di, cx;否则将缓存指针指向下一个ARDS
+        inc dword [ards_count];ards数量+1
         cmp ebx, 0
         jnz .next;ebx不为0则标志检测未结束
 
@@ -40,7 +41,7 @@ prepare_protect_mode:
     or eax, 1
     mov cr0, eax
 
-    ;用跳转来刷新缓存
+    ;通过段选择子来访问内存空间，用跳转来刷新缓存
     jmp dword code_selector:protect_mode
 
 print:
@@ -87,13 +88,14 @@ protect_mode:
     mov ecx, 10;起始扇区
     mov bl, 200;扇区数量，二者在makefile中决定
 
-    call read_disk
+    call read_disk;读入内核
 
-    jmp dword code_selector:0x10000
+    mov eax, 0x20220205;魔数
+    mov ebx, ards_count;ards数量指针，为了更好的兼容grub
+
+    jmp dword code_selector:0x10000;进入内核
 
     ud2;表示出错
-
-    jmp $
 
 read_disk:
     mov dx, 0x1f2;扇区数量端口
@@ -166,11 +168,11 @@ code_selector equ (1<<3);PRL和TI全为0，将index左移3位就行
 data_selector equ (2<<3)
 
 memory_base equ 0;内存基地址
-memory_limit equ ((1024*1024*1024*4)/(1024*4))-1;内存界限
+memory_limit equ ((1024*1024*1024*4)/(1024*4))-1;内存界限，4个G
 
 gdt_ptr:
-    dw (gdt_end-gdt_base) - 1
-    dd gdt_base
+    dw (gdt_end-gdt_base) - 1;GDT界限
+    dd gdt_base;GDT起始位置
 
 gdt_base:
     dd 0,0;第0个全为0
@@ -195,5 +197,5 @@ gdt_data:
 gdt_end:
 
 ards_count:
-    dw 0
+    dd 0
 ards_buffer:

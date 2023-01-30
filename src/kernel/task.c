@@ -4,12 +4,12 @@
 
 #define PAGE_SIZE 0x1000
 
-extern task_switch();
+extern void task_switch();
 
 task_t *a = (task_t *)0x1000;
 task_t *b = (task_t *)0x2000;
 
-//获取当前这一页的起始位置
+//获取当前这一页的起始位置，将esp后三位抹去
 task_t *running_task(){
     asm volatile(
         "movl %esp, %eax\n"
@@ -17,28 +17,23 @@ task_t *running_task(){
     );
 }
 
-static void schedule(){
+void schedule(){
     task_t *current = running_task();
     task_t *next = current == a ? b : a;
     task_switch(next);//切换任务
 }
 
-u32 thread_a(){
-    while (true)
-    {
-        printk("A");
-        schedule();
-    }
+u32 _ofp thread_a(){
+    asm volatile("sti");
+    while(true)
+            printk("A");
 }
 
-u32 thread_b(){
-    while (true)
-    {
-        printk("B");
-        schedule();
-    }
+u32 _ofp thread_b(){
+    asm volatile("sti");
+    while(true)
+            printk("B");
 }
-
 
 static void task_create(task_t *task, target_t target){
     u32 stack = (u32)task + PAGE_SIZE;//栈顶从上往下

@@ -1,5 +1,6 @@
 global task_switch
 
+;此时栈中压入了一个参数，即下一个任务next的起始地址
 task_switch:
     push ebp
     mov ebp, esp;保存栈帧
@@ -13,7 +14,7 @@ task_switch:
 
     mov [eax], esp;当前任务的栈顶保存到任务起始位置的四个字节
 
-    mov eax, [ebp + 8];next的起始位置
+    mov eax, [ebp + 8];获取栈中压入的next的起始地址
     mov esp, [eax];恢复next的栈顶
 
     pop edi;这里pop的就是next的值了

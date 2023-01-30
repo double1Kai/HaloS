@@ -11,22 +11,26 @@
 #include <halos/task.h>
 #include <halos/interrupt.h>
 #include <halos/stdlib.h>
+#include <halos/clock.h>
+#include <halos/time.h>
+#include <halos/rtc.h>
+#include <halos/memory.h>
+extern void mapping_init();
+extern void bitmap_tests();
 
 void kernel_init(){
 
-    console_init();
-    gdt_init();
+    memory_map_init();
+    mapping_init();
     interrupt_init();
+    // clock_init();
+    // time_init();
+    // rtc_init();
 
-    asm volatile(
-        "sti"//开中断
-    );
+    bitmap_tests();
 
-    u32 counter = 0;
-    while (true)
-    {
-        DEBUGK("looping in kernel init %d...\n",counter++);
-        delay(100000000);
-    }
+
+    //asm volatile("sti");
+    hang();
     return;
 }
