@@ -12,6 +12,16 @@
         "io.h": "c",
         "clock.h": "c",
         "stdlib.h": "c",
-        "assert.h": "c"
+        "assert.h": "c",
+        "time.h": "c",
+        "console.h": "c",
+        "task.h": "c",
+        "memory.h": "c",
+        "syscall.h": "c",
+        "fifo.h": "c",
+        "arena.h": "c",
+        "list.h": "c",
+        "bitmap.h": "c",
+        "multiboot2.h": "c"
     }
 }

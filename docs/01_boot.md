@@ -74,6 +74,25 @@ BIOS在加电自检后，将主引导扇区读到0x7c00的位置，并跳转到�
 | `0xF0000` | `0xFFFEF` | 64KB-16B | 系统BIOS |
 | `0xFFFF0` | `0xFFFFF` | 16B | 系统BIOS入口地址|
 
+## multiboot2 头
+
+要支持 multiboot2，内核必须添加一个 multiboot 头，而且必须再内核开始的 32768(0x8000) 字节，而且必须 64 字节对齐；
+
+| 偏移  | 类型 | 名称                | 备注 |
+| ----- | ---- | ------------------- | ---- |
+| 0     | u32  | 魔数 (magic)        | 必须 |
+| 4     | u32  | 架构 (architecture) | 必须 |
+| 8     | u32  | 头部长度 (header_length)   | 必须 |
+| 12    | u32  | 校验和 (checksum)   | 必须 |
+| 16-XX |      | 标记 (tags)         | 必须 |
+
+- `magic` = 0xE85250D6
+- `architecture`:
+    - 0：32 位保护模式
+- `checksum`：与 `magic`, `architecture`, `header_length` 相加必须为 `0`
+
+## i386状态
+- eax：魔数0x36d76289，太复杂了，直接抄了
 
 
 

@@ -31,5 +31,14 @@ typedef unsigned long long u64;
 
 typedef u32 time_t;
 typedef u32 idx_t;
+typedef int32 pid_t;
+
+//文件描述符，3种
+typedef int32 fd_t;
+typedef enum{
+    stdin,
+    stdout,
+    stderr,
+} std_fd_t;
 
 #endif

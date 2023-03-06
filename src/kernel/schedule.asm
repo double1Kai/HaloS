@@ -1,3 +1,7 @@
+[bits 32]
+
+section .text
+
 global task_switch
 
 ;此时栈中压入了一个参数，即下一个任务next的起始地址

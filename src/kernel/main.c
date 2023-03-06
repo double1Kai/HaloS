@@ -16,21 +16,28 @@
 #include <halos/rtc.h>
 #include <halos/memory.h>
 extern void mapping_init();
-extern void bitmap_tests();
+extern void task_init();
+extern void syscall_init();
+extern void keyboard_init();
+extern void tss_init();
+extern void ide_init();
+extern void arena_init();
+#define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
 void kernel_init(){
-
+    tss_init();
     memory_map_init();
     mapping_init();
+    arena_init();
+    
     interrupt_init();
-    // clock_init();
-    // time_init();
+    clock_init();
+    keyboard_init();
+    time_init();
     // rtc_init();
-
-    bitmap_tests();
-
-
-    //asm volatile("sti");
-    hang();
+    ide_init();
+    task_init();
+    syscall_init();
+    set_interrupt_state(true);
     return;
 }

@@ -8,7 +8,7 @@ section .text
 ;宏，方便写所有的中断函数
 %macro INTERRUPT_HANDLER 2;两个参数，1是编号，2是是否压入错误码
 interrupt_handler_%1:;针对编号
-    xchg bx, bx
+    ; xchg bx, bx
 %ifn %2
     push 0x20222202
 %endif
@@ -31,16 +31,23 @@ interrupt_entry:
     push eax
     ;调用对应的中断处理函数
     call[handler_table + eax * 4]
-    ;调用完成后恢复栈
+
+global interrupt_exit
+interrupt_exit:
+    
+    ;对应push eax，调用完成后恢复栈
     add esp, 4
 
+    ;恢复下文和寄存器信息
     popa
     pop gs
     pop fs
     pop es
     pop ds
+    ; mov ds, [esp]
+    ; add esp, 4
 
-    add esp, 8;恢复栈
+    add esp, 8;对应编号；对应error code 或 magic，恢复栈
 
     iret
 
@@ -157,4 +164,41 @@ handler_entry_table:
     dd interrupt_handler_0x2e
     dd interrupt_handler_0x2f
     
+section .text
+extern syscall_check
+extern syscall_table
+global syscall_handler
 
+syscall_handler:
+    ; xchg bx, bx
+
+    ;验证系统调用号
+    push eax
+    call syscall_check
+    add esp, 4
+
+    push 0x20222202
+    push 0x80
+
+    ;保存上文及寄存器信息
+    push ds
+    push es
+    push fs
+    push gs
+    pusha
+
+    push 0x80 ;向中断处理函数传递中断向量 vector
+    ; xchg bx, bx
+    push edx
+    push ecx
+    push ebx
+
+    ;调用系统调用处理函数，table中存放了不同处理函数的入口
+    call [syscall_table + eax * 4]
+
+    ; xchg bx, bx
+    add esp, 12;恢复栈
+    mov dword [esp + 8 * 4], eax;修改栈中eax的值，设置系统调用返回值
+    
+    ;跳转至中断返回
+    jmp interrupt_exit
