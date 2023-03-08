@@ -3,6 +3,11 @@
 
 #include <halos/halos.h>
 
+//用来撑出一块区域
+#define CONCAT(x, y) x##y
+#define RESERVED_TOKEN(x, y) CONCAT(x, y)
+#define RESERVED RESERVED_TOKEN(reserved, __LINE__)
+
 #define EOF -1//End Of File
 #define NULL ((void* )0)//空指针
 #define EOS '\0'
@@ -32,6 +37,7 @@ typedef unsigned long long u64;
 typedef u32 time_t;
 typedef u32 idx_t;
 typedef int32 pid_t;
+typedef int32 dev_t;
 
 //文件描述符，3种
 typedef int32 fd_t;

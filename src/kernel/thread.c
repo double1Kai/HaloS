@@ -54,11 +54,10 @@ void init_thread(){
 
 void test_thread(){
     set_interrupt_state(true);
-    u32 counter = 0;
+    test();//
+    LOGK("test finished of task %d\n", get_pid());
     while (true)
     {   
-        // LOGK("test task %d...\n",counter++);
-        // printf("test thread %d %d %d...\n", get_pid(), get_ppid(), counter++);
-        sleep(2000);
+        sleep(10);
     }
 }

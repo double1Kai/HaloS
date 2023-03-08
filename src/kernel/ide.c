@@ -5,6 +5,8 @@
 #include <halos/assert.h>
 #include <halos/io.h>
 #include <halos/stdio.h>
+#include <halos/interrupt.h>
+#include <halos/device.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -63,6 +65,68 @@
 #define IDE_LBA_SLAVE 0b11110000  // 从盘 LBA
 
 ide_ctrl_t controllers[IDE_CTRL_NR];
+
+//分区类型，挺多的，这点够用了
+typedef enum PART_FS{
+    PART_FS_FAT12 = 1,      //FAT12
+    PART_FS_EXTENED = 5,    //拓展分区
+    PART_FS_MINIX = 0x80,   //minux
+    PART_FS_LINUX = 0x83,   //linux
+} PART_FS;
+
+typedef struct ide_params_t
+{
+    u16 config;                 // 0 General configuration bits
+    u16 cylinders;              // 01 cylinders
+    u16 RESERVED;               // 02
+    u16 heads;                  // 03 heads
+    u16 RESERVED[5 - 3];        // 05
+    u16 sectors;                // 06 sectors per track
+    u16 RESERVED[9 - 6];        // 09
+    u8 serial[20];              // 10 ~ 19 序列号
+    u16 RESERVED[22 - 19];      // 10 ~ 22
+    u8 firmware[8];             // 23 ~ 26 固件版本
+    u8 model[40];               // 27 ~ 46 模型数
+    u8 drq_sectors;             // 47 扇区数量
+    u8 RESERVED[3];             // 48
+    u16 capabilities;           // 49 能力
+    u16 RESERVED[59 - 49];      // 50 ~ 59
+    u32 total_lba;              // 60 ~ 61
+    u16 RESERVED;               // 62
+    u16 mdma_mode;              // 63
+    u8 RESERVED;                // 64
+    u8 pio_mode;                // 64
+    u16 RESERVED[79 - 64];      // 65 ~ 79 参见 ATA specification
+    u16 major_version;          // 80 主版本
+    u16 minor_version;          // 81 副版本
+    u16 commmand_sets[87 - 81]; // 82 ~ 87 支持的命令集
+    u16 RESERVED[118 - 87];     // 88 ~ 118
+    u16 support_settings;       // 119
+    u16 enable_settings;        // 120
+    u16 RESERVED[221 - 120];    // 221
+    u16 transport_major;        // 222
+    u16 transport_minor;        // 223
+    u16 RESERVED[254 - 223];    // 254
+    u16 integrity;              // 校验和
+} _packed ide_params_t;
+
+void ide_handler(int vector){
+    send_eoi(vector);
+
+    //获取中断向量对应的控制器
+    ide_ctrl_t *ctrl = &controllers[vector - IRQ_HARDDISK - 0x20];
+
+    //读取状态寄存器，表示中断处理结束
+    u8 state = inb(ctrl->iobase + IDE_STATUS);
+    LOGK("harddisk interrupt vector %d state 0x%x\n", vector, state);
+    if (ctrl->waiter)
+    {
+        //如果有进程阻塞，则解除阻塞，并设置waiter为空
+        task_unblock(ctrl->waiter);
+        ctrl->waiter = NULL;
+    }
+    
+}
 
 //选择磁盘
 static void ide_select_drive(ide_disk_t *disk){
@@ -156,6 +220,7 @@ static void ide_pio_write_sector(ide_disk_t *disk, u16 *buf){
 //磁盘PIO读操作
 int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
     assert(count > 0);
+    assert(!get_interruput_state()); //异步方式，调用函数时不允许中断
     ide_ctrl_t *ctrl = disk->ctrl;
     //上锁
     lock_acquire(&ctrl->lock);
@@ -174,10 +239,15 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
 
     for (size_t i = 0; i < count; i++)
     {   
-        //等待数据准备就绪
+        //阻塞自身，等待中断到来
+        task_t *task = running_task();
+        if (task->state == TASK_RUNNING){
+            ctrl->waiter = task;
+            task_block(task, NULL, TASK_BLOCKED);
+        }
+
         ide_busy_wait(ctrl, IDE_SR_DRQ);
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
-        //读一个扇区
         ide_pio_read_sector(disk, (u16 *)offset);
     }
     //释放锁
@@ -188,6 +258,7 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
 //磁盘PIO写操作
 int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
     assert(count > 0);
+    assert(!get_interruput_state()); //异步方式，调用函数时不允许中断
     ide_ctrl_t *ctrl = disk->ctrl;
     //上锁
     lock_acquire(&ctrl->lock);
@@ -211,6 +282,14 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
         //写一个扇区
         ide_pio_write_sector(disk, (u16 *)offset);
+        task_t *task = running_task();
+        if(task->state == TASK_RUNNING){
+            //阻塞自己，等待写完
+            ctrl->waiter = task;
+            task_block(task, NULL, TASK_BLOCKED);
+        }
+        LOGK("write sector wait 1s, pid %d\n", task->pid);
+        sleep(100); //TODO:删掉这两行
         //等待数据准备就绪
         ide_busy_wait(ctrl, IDE_SR_NULL);
     }
@@ -219,12 +298,166 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
     return 0;
 }
 
+//重置硬盘控制器，用不到，但还是写一个备着
+static void ide_reset_controller(ide_ctrl_t *ctrl){
+    outb(ctrl->iobase + IDE_CONTROL, IDE_CTRL_SRST);
+    ide_busy_wait(ctrl, IDE_SR_NULL);
+    outb(ctrl->iobase + IDE_CONTROL, ctrl->control);
+    ide_busy_wait(ctrl, IDE_SR_NULL);
+}
+
+//大端转小端，反着应该也行
+static void ide_swap_pairs(char *buf, u32 len){
+    for (size_t i = 0; i < len; i += 2)
+    {
+        register char ch = buf[i];
+        buf[i] = buf[i + 1];
+        buf[i + 1] = ch;
+    }
+    buf[len - 1] = '\0';
+}
+
+//识别磁盘
+static u32 ide_identify(ide_disk_t *disk, u16 *buf){
+    LOGK("identifying disk %s ...\n", disk->name);
+    lock_acquire(&disk->ctrl->lock);
+    ide_select_drive(disk);
+
+    //发送IDENTIFY命令，读取一个扇区，即为磁盘信息
+    outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_IDENTIFY);
+    ide_busy_wait(disk->ctrl, IDE_SR_NULL);
+    ide_params_t *params = (ide_params_t *)buf;
+    ide_pio_read_sector(disk, buf);
+
+    LOGK("disk %s total lba %d\n", disk->name, params->total_lba);
+
+    u32 ret = EOF;
+    if(params->total_lba == 0){
+        lock_release(&disk->ctrl->lock);
+        return ret;
+    }
+
+    ide_swap_pairs(params->serial, sizeof(params->serial));
+    LOGK("disk %s serial number %s\n", disk->name, params->serial);
+
+    ide_swap_pairs(params->firmware, sizeof(params->firmware));
+    LOGK("disk %s firmware version %s\n", disk->name, params->firmware);
+
+    ide_swap_pairs(params->model, sizeof(params->model));
+    LOGK("disk %s model number %s\n", disk->name, params->model);
+
+    disk->total_lbas = params->total_lba;
+    disk->cylinders = params->cylinders;
+    disk->head = params->heads;
+    disk->sectors = params->sectors;
+    ret = 0;
+
+    lock_release(&disk->ctrl->lock);
+    return ret;
+}
+
+//读分区，此时lba算是相对地址
+int ide_pio_part_read(ide_part_t *part, void *buf, u8 count, idx_t lba){
+    return ide_pio_read(part->disk, buf, count, part->start + lba);
+}
+
+//写分区，此时lba算是相对地址
+int ide_pio_part_write(ide_part_t *part, void *buf, u8 count, idx_t lba){
+    return ide_pio_write(part->disk, buf, count, part->start + lba);
+}
+
+static void ide_part_init(ide_disk_t *disk, u16 *buf){
+    //磁盘不可用
+    if(!disk->total_lbas){
+        return;
+    }
+
+    //读取主引导扇区
+    ide_pio_read(disk, buf, 1, 0);
+
+    //初始化主引导扇区
+    boot_sector_t *boot = (boot_sector_t *)buf;
+    for (size_t i = 0; i < IDE_PART_NR; i++)
+    {
+        part_entry_t *entry = &boot->entry[i];
+        ide_part_t *part = &disk->parts[i];
+        if(!entry->count){
+            continue;
+        }
+        sprintf(part->name, "%s%d", disk->name, i + 1);
+        LOGK("part %s \n", part->name);
+        LOGK("    bootable %d\n", entry->bootable);
+        LOGK("    start %d\n", entry->start);
+        LOGK("    count %d\n", entry->count);
+        LOGK("    system 0x%x\n", entry->system);
+
+        part->disk = disk;
+        part->count = entry->count;
+        part->system = entry->system;
+        part->start = entry->start;
+
+        //如果是拓展分区，不支持
+        if(entry->system == PART_FS_EXTENED){
+            LOGK("Unsupported extended partition!!!\n");
+
+            boot_sector_t *eboot = (boot_sector_t *)(buf + SECTOR_SIZE);
+            ide_pio_read(disk, (void *)eboot, 1, entry->start);
+
+            for (size_t j = 0; j < IDE_PART_NR; j++)
+            {
+                part_entry_t *eentry = &eboot->entry[j];
+                if (!eentry->count)
+                    continue;
+                LOGK("part %d extend %d\n", i, j);
+                LOGK("    bootable %d\n", eentry->bootable);
+                LOGK("    start %d\n", eentry->start);
+                LOGK("    count %d\n", eentry->count);
+                LOGK("    system 0x%x\n", eentry->system);
+            }
+        }
+    }
+}
+
+//磁盘控制
+int ide_pio_ioctl(ide_disk_t *disk, int cmd, void *args, int flags){
+    switch (cmd)
+    {
+    case DEV_CMD_SECTOR_START:
+        return 0;
+        break;
+    case DEV_CMD_SECTOR_COUNT:
+        return disk->total_lbas;
+        break;
+    default:
+    panic("device command %d can't recognized!!!\n");
+        break;
+    }
+}
+
+//分区控制
+int ide_pio_part_ioctl(ide_part_t *part, int cmd, void *args, int flags){
+    switch (cmd)
+    {
+    case DEV_CMD_SECTOR_START:
+        return part->start;
+        break;
+    case DEV_CMD_SECTOR_COUNT:
+        return part->count;
+        break;
+    default:
+    panic("device command %d can't recognized!!!\n");
+        break;
+    }
+}
+
 static void ide_ctrl_init(){
+    u16 *buf = (u16*)alloc_kpage(1);//用来读硬盘的属性
     for(size_t cidx = 0; cidx < IDE_CTRL_NR; cidx++){
         ide_ctrl_t *ctrl = &controllers[cidx];
         sprintf(ctrl->name, "ide%u", cidx);
         lock_init(&ctrl->lock);
         ctrl->active = NULL;
+        ctrl->waiter = NULL;
 
         if (cidx)//如果是从通道
         {
@@ -232,6 +465,8 @@ static void ide_ctrl_init(){
         }else{//主通道
             ctrl->iobase = IDE_IOBASE_PRIMARY;
         }
+
+        ctrl->control = inb(ctrl->iobase + IDE_CONTROL);
 
         for (size_t didx = 0; didx < IDE_DISK_NR; didx++)
         {
@@ -246,6 +481,35 @@ static void ide_ctrl_init(){
                 disk->master = true;
                 disk->selector = IDE_LBA_MASTER;
             }
+            ide_identify(disk, buf);
+            ide_part_init(disk, buf);
+        }
+    }
+    free_kpage((u32)buf, 1);
+}
+
+static void ide_install(){
+    for (size_t cidx = 0; cidx < IDE_CTRL_NR; cidx++)
+    {
+        ide_ctrl_t *ctrl = &controllers[cidx];
+        for (size_t didx = 0; didx < IDE_DISK_NR; didx++)
+        {
+            ide_disk_t *disk = &ctrl->disks[didx];
+            if(!disk->total_lbas){
+                continue;
+            }
+            dev_t dev = device_install(DEV_BLOCK, DEV_IDE_DISK, disk, disk->name, 
+            0, ide_pio_ioctl, ide_pio_read, ide_pio_write);
+
+            for (size_t i = 0; i < IDE_PART_NR; i++)
+            {
+                ide_part_t *part = &disk->parts[i];
+                if(!part->count){
+                    continue;
+                }
+                device_install(DEV_BLOCK, DEV_IDE_PART, part, part->name,
+                dev, ide_pio_part_ioctl, ide_pio_part_read, ide_pio_part_write);
+            }
         }
     }
 }
@@ -253,14 +517,13 @@ static void ide_ctrl_init(){
 void ide_init(){
     LOGK("ide init...\n");
     ide_ctrl_init();
+    
+    ide_install();
 
-    void *buf = (void *)alloc_kpage(1);
-    BMB;
-    LOGK("read buffer %x\n", buf);
-    ide_pio_read(&controllers[0].disks[0], buf, 1, 0);
-    BMB;
-    memset(buf, 0x5a, SECTOR_SIZE);
-    BMB;
-    ide_pio_write(&controllers[0].disks[0], buf, 1, 0);
-    free_kpage((u32)buf, 1);
+    //注册硬盘中断，并打开屏蔽字
+    set_interrupt_handler(IRQ_HARDDISK, ide_handler);
+    set_interrupt_handler(IRQ_HARDDISK2, ide_handler);
+    set_interrupt_mask(IRQ_HARDDISK, true);
+    set_interrupt_mask(IRQ_HARDDISK2, true);
+    set_interrupt_mask(IRQ_CASCADE, true);
 }

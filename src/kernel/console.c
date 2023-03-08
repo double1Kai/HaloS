@@ -3,6 +3,7 @@
 #include<halos/string.h>
 #include<halos/clock.h>
 #include<halos/interrupt.h>
+#include<halos/device.h>
 
 #define CRT_ADDR_REG 0x3D4 //索引寄存器
 #define CRT_DATA_REG 0x3D5 //数据寄存器
@@ -141,7 +142,7 @@ static void command_lf(){
 }
 
 //在屏幕上输出字符串
-int32 console_write(char *buf, u32 count){
+int32 console_write(void *dev, char *buf, u32 count){
     bool intr = interrupt_disable();//临界区，禁止中断
     char ch;
     int32 nr = 0;
@@ -197,5 +198,7 @@ int32 console_write(char *buf, u32 count){
     return nr;
 }
 void console_init(){
-    console_clear(); 
+    console_clear();
+    //安装console设备
+    device_install(DEV_CHAR, DEV_CONSOLE, NULL, "console", 0, NULL, NULL, console_write);
 }

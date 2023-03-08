@@ -42,6 +42,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/assert.o \
 	$(BUILD)/kernel/debug.o \
 	$(BUILD)/kernel/global.o \
+	$(BUILD)/kernel/device.o \
 	$(BUILD)/kernel/task.o \
 	$(BUILD)/kernel/gate.o \
 	$(BUILD)/kernel/schedule.o \
@@ -78,14 +79,25 @@ $(BUILD)/master.img: $(BUILD)/boot/boot.bin \
 	$(BUILD)/boot/loader.bin \
 	$(BUILD)/system.bin \
 	$(BUILD)/system.map \
+	$(SRC)/utils/master.sfdisk \
 
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
 	dd if=$(BUILD)/boot/boot.bin of=$@ bs=512 count=1 conv=notrunc
 	dd if=$(BUILD)/boot/loader.bin of=$@ bs=512 count=4 seek=2 conv=notrunc
-	#测试system.bin的大小，大于100k的话需要写入更多，lodaer里也需要读入更多
+	# 测试system.bin的大小，大于100k的话需要写入更多，lodaer里也需要读入更多
 	test -n "$$(find $(BUILD)/system.bin -size -100k)"
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=200 seek=10 conv=notrunc
+	# 对硬盘进行分区
+	sfdisk $@ < $(SRC)/utils/master.sfdisk
 	
+$(BUILD)/slave.img:
+	#创建一个32M的磁盘镜像
+	yes | bximage -q -hd=32 -func=create -sectsize=512 -imgmode=flat $@
+
+IMAGES:= $(BUILD)/master.img $(BUILD)/slave.img
+
+image: $(IMAGES)
+
 $(BUILD)/kernel.iso : $(BUILD)/kernel.bin $(SRC)/utils/grub.cfg
 #检测内核文件是否合法
 	grub-file --is-x86-multiboot2 $<
@@ -120,6 +132,7 @@ QEMU:= qemu-system-i386 \
 
 QEMU_DISK:=-boot c \
 	-drive file=$(BUILD)/master.img,if=ide,index=0,media=disk,format=raw \
+	-drive file=$(BUILD)/slave.img,if=ide,index=1,media=disk,format=raw
 
 QEMU_CDROM:=-boot d \
 	-drive file=$(BUILD)/kernel.iso,media=cdrom \
@@ -127,11 +140,11 @@ QEMU_CDROM:=-boot d \
 QEMU_DEBUG:= -s -S
 
 .PHONY: qemu
-qemu: $(BUILD)/master.img
+qemu: $(IMAGES)
 	$(QEMU) $(QEMU_DISK)
 
 .PHONY: qemug
-qemug: $(BUILD)/master.img
+qemug: $(IMAGES)
 	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
 
 .PHONY: qemub

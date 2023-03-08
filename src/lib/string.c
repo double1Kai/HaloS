@@ -10,7 +10,21 @@ char *strcpy(char *dest, const char *src){
             return dest;
         }
     }
-    
+}
+
+//拷贝n个字符，防止缓冲区溢出
+char *strncpy(char *dest, const char *src, size_t count){
+    char *ptr = dest;
+    size_t nr = 0;
+    for (; nr < count; nr++)
+    {
+        *ptr++ = *src;
+        if(*src++ == EOS){
+            return dest;
+        }
+    }
+    dest[count - 1] = EOS;
+    return dest;
 }
 
 //拼接字符串

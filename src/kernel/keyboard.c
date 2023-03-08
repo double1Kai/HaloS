@@ -5,6 +5,7 @@
 #include <halos/task.h>
 #include <halos/mutex.h>
 #include <halos/fifo.h>
+#include <halos/device.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -370,7 +371,7 @@ void keyboard_handler(int vector){
 }
 
 //从缓冲里读count个字符到buf中
-u32 keyboard_read(char *buf, u32 count){
+u32 keyboard_read(void *dev, char *buf, u32 count){
     lock_acquire(&lock);
     int nr = 0;
     while (nr < count)
@@ -401,4 +402,7 @@ void keyboard_init(){
 
     set_interrupt_handler(IRQ_KEYBOARD, keyboard_handler);
     set_interrupt_mask(IRQ_KEYBOARD, true);
+    
+    //安装键盘设备
+    device_install(DEV_CHAR, DEV_KEYBOARD, NULL, "keyboard", 0, NULL, keyboard_read, NULL);
 }

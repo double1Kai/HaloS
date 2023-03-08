@@ -4,8 +4,15 @@
 #include <halos/types.h>
 
 #define element_offset(type, member) (u32)(&((type *)0)->member)
-//通过node的指针求到task的指针
+
+//通过node的指针求到包含该node的结构体的指针
 #define element_entry(type, member, ptr) (type *)((u32)ptr - element_offset(type, member))
+
+//获取node对应任务的key值
+#define element_node_key(node, offset) *(int *)((int)node + offset)
+
+//获取node到key的偏移量
+#define element_node_offset(type, node, key) ((int)(&((type *)0)->key) - (int)(&((type *)0)->node))
 
 //链表节点，没有数据段，可以用特殊方法将同一块链接到多个不同链表中
 typedef struct list_node_t
@@ -42,5 +49,7 @@ void list_remove(list_node_t *node);
 bool list_empty(list_t *list);
 //获取链表长度
 u32 list_size(list_t *list);
+//链表插入排序
+void list_insert_sort(list_t *list, list_node_t *node, int offset);
  
 #endif

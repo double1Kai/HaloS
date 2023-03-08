@@ -22,6 +22,7 @@
         "arena.h": "c",
         "list.h": "c",
         "bitmap.h": "c",
-        "multiboot2.h": "c"
+        "multiboot2.h": "c",
+        "device.h": "c"
     }
 }

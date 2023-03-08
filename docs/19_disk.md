@@ -1,1 +1,0 @@
-### 硬盘同步PIO Programed In/Out

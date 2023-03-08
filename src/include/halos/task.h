@@ -29,7 +29,7 @@ typedef struct task_t
     list_node_t node;   //任务阻塞节点
     task_state_t state; //状态
     u32 priority;       //优先级
-    u32 ticks;          //剩余时间片
+    int ticks;          //剩余时间片
     u32 jiffies;        //上次执行时的全局时间片
     char name[TASK_NAME_LEN];//任务名
     u32 uid;            //用户id

@@ -130,21 +130,9 @@ void task_sleep(u32 ms){
     task_t *current = running_task();
     current->ticks = jiffies + ticks;
 
-    //在睡眠链表中按休眠时间由低到高插入，先找到插入点
-    list_t *list = &sleep_list;
-    list_node_t *anchor = &list->tail;
-    for(list_node_t *ptr = list->head.next; ptr != &list->tail; ptr = ptr->next){
-        task_t *task = element_entry(task_t, node, ptr);
-        if(task->ticks > current->ticks){
-            anchor = ptr;
-            break;
-        }
-    }
-    //必须没加入其他链表中
-    assert(current->node.next == NULL);
-    assert(current->node.prev == NULL);
-    //插入
-    list_insert_before(anchor, &current->node);
+    //在睡眠链表中按休眠时间由低到高插入
+    list_insert_sort(&sleep_list, &current->node, element_node_offset(task_t, node, ticks));
+
     //改一下状态
     current->state = TASK_SLEEPING;
     //调度
@@ -442,5 +430,7 @@ void task_init(){
     
     idle_task = task_create(idle_thread, "idle", 1, KERNEL_USER);
     task_create(init_thread, "init", 5, NORMAL_USER);
-    task_create(test_thread, "test", 5, KERNEL_USER);
+    task_create(test_thread, "test", 5, 1);
+    task_create(test_thread, "test", 5, 5);//TODO:删掉这两行
+    task_create(test_thread, "test", 5, 3);
 }
