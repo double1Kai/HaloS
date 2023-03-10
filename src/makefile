@@ -52,6 +52,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/time.o \
 	$(BUILD)/kernel/rtc.o \
 	$(BUILD)/kernel/ide.o \
+	$(BUILD)/kernel/buffer.o \
 	$(BUILD)/kernel/memory.o \
 	$(BUILD)/kernel/bitmap.o \
 	$(BUILD)/kernel/list.o \
@@ -60,6 +61,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/keyboard.o \
 	$(BUILD)/kernel/fifo.o \
 	$(BUILD)/kernel/arena.o \
+	$(BUILD)/fs/super.o \
 	$(BUILD)/lib/vsprintf.o \
 	$(BUILD)/lib/string.o \
 	$(BUILD)/lib/printf.o \
@@ -87,16 +89,83 @@ $(BUILD)/master.img: $(BUILD)/boot/boot.bin \
 	# 测试system.bin的大小，大于100k的话需要写入更多，lodaer里也需要读入更多
 	test -n "$$(find $(BUILD)/system.bin -size -100k)"
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=200 seek=10 conv=notrunc
+
 	# 对硬盘进行分区
 	sfdisk $@ < $(SRC)/utils/master.sfdisk
+	# 挂载设备
+	sudo losetup /dev/loop0 --partscan $@
+	# 创建文件系统，第一版minix，文件名长度14字节，在loop0设备的第一个分区
+	sudo mkfs.minix -1 -n 14 /dev/loop0p1
+	# 挂载文件系统
+	sudo mount /dev/loop0p1 /mnt
+	# 切换所有者
+	sudo chown ${USER} /mnt
+	# 创建目录，home和四级目录
+	mkdir -p /mnt/home
+	mkdir -p /mnt/d1/d2/d3/d4
+	# 创建一些文件
+	echo "hello halos!!!, from root direcotry file ..." > /mnt/hello.txt
+	echo "hello halos!!!, from home direcotry file ..." > /mnt/home/hello.txt
+	#卸载文件系统
+	sudo umount /mnt
+	#卸载设备
+	sudo losetup -d /dev/loop0
+
 	
 $(BUILD)/slave.img:
 	#创建一个32M的磁盘镜像
 	yes | bximage -q -hd=32 -func=create -sectsize=512 -imgmode=flat $@
+	# 对硬盘进行分区
+	sfdisk $@ < $(SRC)/utils/slave.sfdisk
+	# 挂载设备
+	sudo losetup /dev/loop0 --partscan $@
+	# 创建文件系统，第一版minix，文件名长度14字节，在loop0设备的第一个分区
+	sudo mkfs.minix -1 -n 14 /dev/loop0p1
+	# 挂载文件系统
+	sudo mount /dev/loop0p1 /mnt
+	# 切换所有者
+	sudo chown ${USER} /mnt
+	# 创建一些文件
+	echo "hello halos!!!, from root direcotry file ..." > /mnt/hello.txt
+	#卸载文件系统
+	sudo umount /mnt
+	#卸载设备
+	sudo losetup -d /dev/loop0
+
+.PHONY: mount0
+mount0: $(BUILD)/master.img
+	sudo losetup /dev/loop0 --partscan $<
+	sudo mount /dev/loop0p1 /mnt
+	sudo chown $(USER)	/mnt
+
+.PHONY: umount0
+umount0: /dev/loop0
+	-sudo umount /mnt
+	-sudo losetup -d $<
+
+.PHONY: mount1
+mount1: $(BUILD)/slave.img
+	sudo losetup /dev/loop0 --partscan $<
+	sudo mount /dev/loop0p1 /mnt
+	sudo chown $(USER)	/mnt
+
+.PHONY: umount1
+umount1: /dev/loop1
+	-sudo umount /mnt
+	-sudo losetup -d $<
 
 IMAGES:= $(BUILD)/master.img $(BUILD)/slave.img
 
 image: $(IMAGES)
+
+
+
+
+
+
+
+
+
 
 $(BUILD)/kernel.iso : $(BUILD)/kernel.bin $(SRC)/utils/grub.cfg
 #检测内核文件是否合法

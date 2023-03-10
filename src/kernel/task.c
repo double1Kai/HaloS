@@ -430,7 +430,5 @@ void task_init(){
     
     idle_task = task_create(idle_thread, "idle", 1, KERNEL_USER);
     task_create(init_thread, "init", 5, NORMAL_USER);
-    task_create(test_thread, "test", 5, 1);
-    task_create(test_thread, "test", 5, 5);//TODO:删掉这两行
-    task_create(test_thread, "test", 5, 3);
+    task_create(test_thread, "test", 5, KERNEL_USER);
 }

@@ -180,21 +180,19 @@ static u32 ide_busy_wait(ide_ctrl_t *ctrl, u8 mask){
 }
 
 //选择扇区
-static void ide_select_sctor(ide_disk_t *disk, u32 lba, u8 count){
+static void ide_select_sector(ide_disk_t *disk, u32 lba, u8 count){
     //输出功能寄存器，不知道干嘛用的
     outb(disk->ctrl->iobase + IDE_FEATURE, 0);
 
     //输出读写扇区数量
     outb(disk->ctrl->iobase + IDE_SECTOR, count);
 
-    //输出LBA低字节
+    // LBA 低字节
     outb(disk->ctrl->iobase + IDE_LBA_LOW, lba & 0xff);
-
-    //输出LBA中字节
+    // LBA 中字节
     outb(disk->ctrl->iobase + IDE_LBA_MID, (lba >> 8) & 0xff);
-
-    //输出LBA高字节
-    outb(disk->ctrl->iobase + IDE_LBA_MID, (lba >> 16) & 0xff);
+    // LBA 高字节
+    outb(disk->ctrl->iobase + IDE_LBA_HIGH, (lba >> 16) & 0xff);
 
     //输出LBA最高四位 + 磁盘选择
     outb(disk->ctrl->iobase + IDE_HDDEVSEL, ((lba >> 24) & 0xf) | disk->selector);
@@ -232,7 +230,7 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
     ide_busy_wait(ctrl, IDE_SR_DRDY);
 
     //选择扇区
-    ide_select_sctor(disk, lba, count);
+    ide_select_sector(disk, lba, count);
 
     //发送读命令
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_READ);
@@ -272,7 +270,7 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
     ide_busy_wait(ctrl, IDE_SR_DRDY);
 
     //选择扇区
-    ide_select_sctor(disk, lba, count);
+    ide_select_sector(disk, lba, count);
 
     //发送写命令
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_WRITE);
@@ -288,8 +286,6 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba){
             ctrl->waiter = task;
             task_block(task, NULL, TASK_BLOCKED);
         }
-        LOGK("write sector wait 1s, pid %d\n", task->pid);
-        sleep(100); //TODO:删掉这两行
         //等待数据准备就绪
         ide_busy_wait(ctrl, IDE_SR_NULL);
     }

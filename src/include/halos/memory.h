@@ -6,8 +6,20 @@
 #define PAGE_SIZE 0x1000     // 一页的大小 4K
 #define MEMORY_BASE 0x100000 // 1M，可用内存开始的位置
 
-//内核占用8M内存
-#define KERNEL_MEMORY_SIZE 0x800000
+//内核占用16M内存，8~12是高速缓存区域，12~16用作虚拟磁盘
+#define KERNEL_MEMORY_SIZE 0x1000000
+
+//内核缓存地址
+#define KERNEL_BUFFER_MEM 0x800000
+
+//内核缓存大小
+#define KERNEL_BUFFER_SIZE 0x400000
+
+//内存虚拟磁盘地址
+#define KERNEL_RAMDISK_MEM (KERNEL_BUFFER_MEM + KERNEL_BUFFER_SIZE)
+
+//内存虚拟磁盘大小
+#define KERNEL_RAMDISK_SIZE 0x400000
 
 //用户栈顶地址128M
 #define USER_STACK_TOP 0x8000000
@@ -22,12 +34,6 @@ void memory_map_init();
 
 //内核页目录索引
 #define KERNEL_PAGE_DIR 0x1000
-
-//内核页表索引
-static u32 KERNEL_PAGE_TABLE[] = {
-    0x2000,
-    0x3000
-};
 
 typedef struct page_entry_t{
     u8 present : 1; //1在内存中，0不在

@@ -152,14 +152,14 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
     assert(device->type = DEV_BLOCK);
     //得到扇区位置
     idx_t offset = idx + device_ioctl(device->dev, DEV_CMD_SECTOR_START, 0, 0);
-    //如果是存在辐父设备(是分区)，找到他的父设备(磁盘)
+    //如果是存在父设备(是分区)，找到他的父设备(磁盘)
     if(device->parent){
         device = device_get(device->parent);
     }
 
     request_t *req = kmalloc(sizeof(request_t));
 
-    req->dev = dev;
+    req->dev = device->dev;
     req->buf = buf;
     req->count = count;
     req->idx = offset;
