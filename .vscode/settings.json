@@ -24,6 +24,7 @@
         "bitmap.h": "c",
         "multiboot2.h": "c",
         "device.h": "c",
-        "fs.h": "c"
+        "fs.h": "c",
+        "buffer.h": "c"
     }
 }

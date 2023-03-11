@@ -95,8 +95,23 @@ static void mount_root(){
     //默认主盘的第一个分区是根文件系统
     device_t *device = device_find(DEV_IDE_PART, 0);
     assert(device);
-
+    //读根文件系统超级块
     root = read_super(device->dev); 
+
+    root->iroot = iget(device->dev, 1); //获取根目录的inode
+    root->imount = iget(device->dev, 1); //根目录挂载inode
+
+    idx_t idx = 0;
+    inode_t *inode = iget(device->dev,1);
+
+    //直接块
+    idx = bmap(inode, 3, true);
+    //一级间接块
+    idx = bmap(inode, 7 + 7, true);
+    //二级间接块
+    idx = bmap(inode, 7 + 512 * 3 + 510, true);
+
+    iput(inode);
 }
 
 void super_init(){
@@ -107,7 +122,7 @@ void super_init(){
         sb->desc = NULL;
         sb->buf = NULL;
         sb->iroot = NULL;
-        sb->mount = NULL;
+        sb->imount = NULL;
         list_init(&sb->inode_list);
     }
 

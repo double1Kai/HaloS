@@ -10,6 +10,7 @@
 #include <halos/global.h>
 #include <halos/arena.h>
 #include <halos/types.h>
+#include <halos/fs.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -226,6 +227,9 @@ static task_t *task_create(target_t target, const char *name, u32 priority, u32 
     task->vamp = &kernel_map;
     task->pde = KERNEL_PAGE_DIR;
     task->brk = KERNEL_MEMORY_SIZE;
+    task->iroot = get_root_inode();
+    task->ipwd = get_root_inode();
+
     task->magic = HALOS_MAGIC;//MAGIC放最后，如果栈溢出，magic就会改变
 
     return task;

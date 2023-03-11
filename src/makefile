@@ -62,6 +62,9 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/fifo.o \
 	$(BUILD)/kernel/arena.o \
 	$(BUILD)/fs/super.o \
+	$(BUILD)/fs/bmap.o \
+	$(BUILD)/fs/inode.o \
+	$(BUILD)/fs/namei.o \
 	$(BUILD)/lib/vsprintf.o \
 	$(BUILD)/lib/string.o \
 	$(BUILD)/lib/printf.o \
@@ -106,9 +109,9 @@ $(BUILD)/master.img: $(BUILD)/boot/boot.bin \
 	# 创建一些文件
 	echo "hello halos!!!, from root direcotry file ..." > /mnt/hello.txt
 	echo "hello halos!!!, from home direcotry file ..." > /mnt/home/hello.txt
-	#卸载文件系统
+	# 卸载文件系统
 	sudo umount /mnt
-	#卸载设备
+	# 卸载设备
 	sudo losetup -d /dev/loop0
 
 	
@@ -127,9 +130,9 @@ $(BUILD)/slave.img:
 	sudo chown ${USER} /mnt
 	# 创建一些文件
 	echo "hello halos!!!, from root direcotry file ..." > /mnt/hello.txt
-	#卸载文件系统
+	# 卸载文件系统
 	sudo umount /mnt
-	#卸载设备
+	# 卸载设备
 	sudo losetup -d /dev/loop0
 
 .PHONY: mount0

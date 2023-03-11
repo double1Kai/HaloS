@@ -120,6 +120,7 @@ buffer_t *getblk(dev_t dev, idx_t block){
     buffer_t *bf = get_from_hash_table(dev, block);
     if (bf)
     {
+        assert(bf->valid);
         return bf;
     }
     bf = get_free_buffer();
@@ -168,22 +169,19 @@ void brelse(buffer_t *bf){
     {
         return;
     }
-    bf->count--;
-    assert(bf->count >= 0);
-    if(!bf->count){
-        //预防一下，如果加入了什么其他链表，移除，再加入空闲链表
-        if (bf->rnode.next)
-        {
-            list_remove(&bf->rnode);
-        }
-        //加入空闲链表
-        list_push(&free_list, &bf->rnode);
-    }
-
-    //脏的话再写回
     if(bf->dirty){
         bwrite(bf);
     }
+    bf->count--;
+    assert(bf->count >= 0);
+    //如果还有人用，直接返回
+    if(bf->count){
+        return;
+    }
+
+    assert(!bf->rnode.next);
+    assert(!bf->rnode.next);
+    list_push(&free_list, &bf->rnode);
 
     //唤醒等待链表中的进程
     if(!list_empty(&wait_list)){
